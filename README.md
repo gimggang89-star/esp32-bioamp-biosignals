@@ -118,6 +118,3 @@ esp32-bioamp-biosignals/
 
 - [BioAmp EXG Pill](https://github.com/upsidedownlabs/BioAmp-EXG-Pill) — Upside Down Labs (MIT License). 펌웨어의 샘플링 루프와 필터 구성은 공식 예제를 참고했습니다.
 
-## License
-
-MIT © 2026 이승형 (Seunghyung Lee) — 건양대학교 의료IT공학과
