@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BioAmp 실시간 뷰어</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --bg:#eef3f0; --surface:#ffffff; --surface-2:#f4f8f5;
+    --ink:#0f1a15; --ink-2:#3f5249; --muted:#6b7f75;
+    --line:#d8e3dd; --accent:#12833b; --accent-2:#0e6b31; --accent-soft:#dbf1e3;
+    --trace:#12833b; --raw:#8aa79a; --peak:#d97706;
+    --grid-major:rgba(18,131,59,0.16); --grid-minor:rgba(18,131,59,0.06);
+    --danger:#c0392b; --ok:#12833b; --shadow:0 1px 3px rgba(16,40,28,.08),0 8px 24px rgba(16,40,28,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0b120e; --surface:#111a15; --surface-2:#0e1611; --ink:#e7f0eb; --ink-2:#aac0b6; --muted:#7c938a;
+      --line:#22302a; --accent:#34d399; --accent-2:#4ade80; --accent-soft:#123626;
+      --trace:#34d399; --raw:#5f7a6e; --peak:#f59e0b;
+      --grid-major:rgba(52,211,153,0.18); --grid-minor:rgba(52,211,153,0.06);
+      --danger:#ef6b5c; --ok:#34d399; --shadow:0 1px 3px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0b120e; --surface:#111a15; --surface-2:#0e1611; --ink:#e7f0eb; --ink-2:#aac0b6; --muted:#7c938a;
+    --line:#22302a; --accent:#34d399; --accent-2:#4ade80; --accent-soft:#123626;
+    --trace:#34d399; --raw:#5f7a6e; --peak:#f59e0b;
+    --grid-major:rgba(52,211,153,0.18); --grid-minor:rgba(52,211,153,0.06);
+    --danger:#ef6b5c; --ok:#34d399; --shadow:0 1px 3px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{ background:var(--bg); color:var(--ink); font-family:"IBM Plex Sans KR",system-ui,-apple-system,sans-serif; line-height:1.5; -webkit-font-smoothing:antialiased; padding:24px 20px 40px; }
+  .wrap{max-width:1120px;margin:0 auto}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+  header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+  .title h1{font-size:1.5rem;font-weight:700;margin:0;letter-spacing:-.01em}
+  .title p{margin:2px 0 0;color:var(--muted);font-size:.86rem}
+  .title .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:7px;vertical-align:middle;transition:background .2s}
+  .title .dot.live{background:var(--accent);animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  @media (prefers-reduced-motion: reduce){.title .dot{animation:none}}
+  .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  button,select,.filelabel{font-family:inherit;font-size:.84rem;font-weight:600;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 14px;border-radius:9px;transition:border-color .15s,background .15s,transform .05s}
+  button:hover,select:hover{border-color:var(--accent);color:var(--accent-2)}
+  button:active{transform:translateY(1px)}
+  button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn-primary:hover{background:var(--accent-2);color:#fff}
+  .btn-danger{color:var(--danger);border-color:var(--danger)}
+  .btn-danger:hover{background:var(--danger);color:#fff;border-color:var(--danger)}
+  .iconbtn{padding:8px 11px}
+  select{padding:8px 10px}
+  .vitals{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:stretch;margin-bottom:14px}
+  @media (max-width:640px){.vitals{grid-template-columns:1fr}}
+  .bpmcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 22px 14px 24px;display:flex;flex-direction:column;justify-content:center;gap:2px;box-shadow:var(--shadow);min-width:210px;position:relative;overflow:hidden}
+  .bpmcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent)}
+  .bpmrow{display:flex;align-items:baseline;gap:8px}
+  .bpmcard .val{font-size:3rem;font-weight:600;line-height:1;color:var(--accent);letter-spacing:-.02em}
+  .bpmcard .unit{font-size:.82rem;color:var(--muted);font-weight:600;letter-spacing:.04em}
+  .bpmcard .flex-ico{position:absolute;right:16px;top:14px;color:var(--accent);opacity:.9}
+  .bpmcard .sub{font-size:.74rem;color:var(--muted);margin-top:5px}
+  .chips{display:flex;gap:10px;flex-wrap:wrap;align-content:center}
+  .chip{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:9px 14px;min-width:92px;box-shadow:var(--shadow)}
+  .chip .k{font-size:.68rem;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+  .chip .v{font-size:1.02rem;font-weight:600;margin-top:1px}
+  .chip .v.on{color:var(--ok)} .chip .v.off{color:var(--muted)}
+  .plotcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:8px;position:relative}
+  #plot{display:block;width:100%;height:400px;border-radius:9px;touch-action:none}
+  .idlehint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;pointer-events:none;color:var(--muted);text-align:center;padding:20px}
+  .idlehint.hide{display:none}
+  .idlehint .big{font-size:1.05rem;font-weight:600;color:var(--ink-2)}
+  .idlehint .sm{font-size:.85rem;max-width:440px}
+  .idlehint .warn{color:var(--danger);font-weight:600;font-size:.85rem;max-width:480px}
+  .controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--surface);flex-wrap:wrap}
+  .seg button{border:0;border-radius:0;padding:7px 12px;background:transparent;font-weight:500;color:var(--ink-2)}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+  .seg .cap{padding:7px 8px 7px 12px;font-size:.72rem;color:var(--muted);align-self:center;pointer-events:none}
+  .spacer{margin-left:auto}
+  .hint{margin-top:12px;font-size:.77rem;color:var(--muted);line-height:1.55}
+  .hint b{color:var(--ink-2);font-weight:600}
+  .status{margin-top:10px;font-size:.82rem;color:var(--muted);min-height:1.1em}
+  .status.err{color:var(--danger)} .status.ok{color:var(--ok)}
+  footer{margin-top:18px;font-size:.74rem;color:var(--muted);line-height:1.6}
+  footer code{font-family:"IBM Plex Mono",monospace;background:var(--surface-2);padding:1px 6px;border-radius:5px;font-size:.9em}
+  footer b{color:var(--ink-2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="title">
+      <h1><span class="dot" id="livedot"></span>BioAmp 실시간 파형 뷰어</h1>
+      <p>ESP32 + BioAmp EXG Pill · 포트에서 들어오는 신호를 실시간으로 그립니다 (Web Serial)</p>
+    </div>
+    <div class="actions">
+      <select id="baud" title="통신 속도" aria-label="통신 속도">
+        <option value="115200" selected>115200 (ECG·EOG·EEG)</option>
+        <option value="250000">250000 (EMG)</option>
+        <option value="57600">57600</option>
+        <option value="9600">9600</option>
+      </select>
+      <button id="connectBtn" class="btn-primary">연결</button>
+      <button id="demoBtn">데모</button>
+      <button id="themeBtn" class="iconbtn" title="라이트/다크 전환" aria-label="테마 전환">◐</button>
+    </div>
+  </header>
+
+  <section class="vitals">
+    <div class="bpmcard">
+      <svg class="flex-ico" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2 6 4-14 2 8h6"/></svg>
+      <div class="bpmrow"><span class="val mono" id="bpm">—</span><span class="unit">BPM</span></div>
+      <div class="sub" id="bpmsub">연결하면 실시간 심박이 표시됩니다</div>
+    </div>
+    <div class="chips">
+      <div class="chip"><div class="k">연결 상태</div><div class="v off" id="c_conn">대기</div></div>
+      <div class="chip"><div class="k">측정 레이트</div><div class="v mono" id="c_hz">— Hz</div></div>
+      <div class="chip"><div class="k">받은 샘플</div><div class="v mono" id="c_n">0</div></div>
+      <div class="chip"><div class="k">최근 값</div><div class="v mono" id="c_last">—</div></div>
+      <div class="chip"><div class="k">신호</div><div class="v mono" id="c_sig">—</div></div>
+    </div>
+  </section>
+
+  <div class="plotcard" id="plotcard">
+    <canvas id="plot"></canvas>
+    <div class="idlehint" id="idlehint">
+      <div class="big">아직 연결되지 않았어요</div>
+      <div class="sm">위 <b>연결</b> 버튼을 눌러 ESP32 포트를 선택하세요. 먼저 아두이노 IDE의 <b>시리얼 모니터/플로터를 닫아야</b> 합니다(포트는 한 프로그램만 사용 가능).</div>
+      <div class="sm">기기 없이 화면만 보려면 <b>데모</b> 버튼을 눌러보세요.</div>
+      <div class="warn" id="nowebserial" style="display:none">이 브라우저는 Web Serial을 지원하지 않아요 — <b>Chrome</b> 또는 <b>Edge</b>(데스크톱)에서 열어주세요.</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="seg" role="group" aria-label="표시 신호" id="sigseg">
+      <span class="cap">표시</span>
+      <button data-s="proc" aria-pressed="true">처리된 신호</button>
+      <button data-s="raw" aria-pressed="false">원본</button>
+      <button data-s="both" aria-pressed="false">둘 다</button>
+    </div>
+    <div class="seg" role="group" aria-label="시간창" id="winseg">
+      <span class="cap">시간창</span>
+      <button data-w="3" aria-pressed="false">3초</button>
+      <button data-w="6" aria-pressed="true">6초</button>
+      <button data-w="10" aria-pressed="false">10초</button>
+    </div>
+    <div class="spacer"></div>
+    <button id="pauseBtn" disabled>일시정지</button>
+    <button id="clearBtn" disabled>지우기</button>
+    <button id="saveBtn" disabled>JSON 저장</button>
+    <button id="disconnectBtn" class="btn-danger" disabled>연결 해제</button>
+  </div>
+
+  <div class="hint"><b>실시간 표시</b>: 새 값이 오른쪽에서 들어오며 왼쪽으로 흘러갑니다. <b>처리된 신호</b>는 기기가 필터링해 보내는 값(예: <code>ECG</code>), <b>원본</b>은 <code>Raw</code>. 심박(BPM)은 들어오는 신호의 R-피크로 실시간 추정합니다(ECG일 때 의미 있음). <b>JSON 저장</b>으로 지금까지 받은 구간을 파일로 내려받아 분석용 뷰어(<code>ecg_viewer.html</code> 등)에서 다시 볼 수 있어요.</div>
+  <div class="status" id="status"></div>
+  <footer>
+    <div><b>Web Serial</b>은 데스크톱 <b>Chrome/Edge</b>에서만 동작합니다. 파일을 더블클릭(<code>file://</code>)해서 열어도 되고, 만약 연결이 안 되면 이 파일이 있는 폴더에서 <code>python -m http.server</code> 실행 후 <code>http://localhost:8000/bioamp_live_viewer.html</code> 로 열어보세요.</div>
+    <div style="margin-top:4px">입력 형식은 <code>Raw:1234,ECG:56</code> 또는 정수 한 줄(<code>8431</code>) 모두 인식합니다. baud는 스케치와 동일하게 — ECG·EOG·EEG는 <b>115200</b>, EMG는 <b>250000</b>.</div>
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const $=id=>document.getElementById(id);
+  const canvas=$("plot"), ctx=canvas.getContext("2d");
+  const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+  const MAXN=60000;                       // 버퍼 상한(약 100초@500Hz 이상)
+  const state={
+    port:null, reader:null, closedPromise:null, connected:false, demo:false, paused:false,
+    ts:[], raw:[], proc:[], hasProc:false, label:"—",
+    windowSec:6, show:"proc", n:0, lastVal:null,
+    yLo:null, yHi:null, bpm:null, rr:null, lastChunkT:null, t0ms:null,
+  };
+
+  // ===== 파싱 =====
+  function parseLine(s){
+    s=s.trim(); if(!s) return null;
+    if(s.indexOf("->")>=0) s=s.slice(s.lastIndexOf("->")+2).trim();   // 시리얼모니터 타임스탬프 제거
+    let m=s.match(/Raw\s*:\s*(-?\d+)\s*,\s*([A-Za-z]+)\s*:\s*(-?\d+)/i);
+    if(m) return {raw:+m[1], proc:+m[3], label:m[2].toUpperCase()};
+    if(/^-?\d+$/.test(s)) return {raw:+s, proc:null, label:null};
+    const nums=s.match(/-?\d+/g);
+    if(nums&&nums.length>=2) return {raw:+nums[0], proc:+nums[1], label:null};
+    if(nums&&nums.length===1) return {raw:+nums[0], proc:null, label:null};
+    return null;
+  }
+
+  // ===== 수신 처리 =====
+  function ingest(batch){
+    if(!batch.length) return;
+    const now=performance.now()/1000;
+    let start=state.lastChunkT!=null?state.lastChunkT:now-batch.length/250;
+    if(now-start>2) start=now-batch.length/250;     // 큰 공백이면 리셋
+    const dt=(now-start)/batch.length;
+    for(let i=0;i<batch.length;i++){
+      const b=batch[i];
+      state.ts.push(start+(i+1)*dt);
+      state.raw.push(b.raw);
+      state.proc.push(b.proc==null?b.raw:b.proc);
+      if(b.proc!=null) state.hasProc=true;
+      if(b.label) state.label=b.label;
+      state.lastVal=b.proc!=null?b.proc:b.raw;
+    }
+    state.lastChunkT=now; state.n+=batch.length;
+    if(state.ts.length>MAXN*1.2){ const cut=state.ts.length-MAXN; state.ts.splice(0,cut); state.raw.splice(0,cut); state.proc.splice(0,cut); }
+    if(!state.hasProc && state.show==="proc"){ /* proc 없으면 raw로 */ }
+  }
+
+  // ===== Web Serial 연결 =====
+  async function connect(){
+    if(!("serial" in navigator)){ $("nowebserial").style.display=""; setStatus("이 브라우저는 Web Serial 미지원 — Chrome/Edge에서 열어주세요.",true); return; }
+    let port;
+    try{ port=await navigator.serial.requestPort(); }
+    catch(e){ setStatus("포트 선택이 취소되었습니다.",false); return; }
+    const baud=+$("baud").value;
+    try{ await port.open({baudRate:baud}); }
+    catch(e){ setStatus("포트 열기 실패: "+e.message+" — 시리얼 모니터가 열려 있지 않은지 확인하세요.",true); return; }
+    state.port=port; state.connected=true; state.demo=false;
+    clearData();
+    const dec=new TextDecoderStream();
+    state.closedPromise=port.readable.pipeTo(dec.writable).catch(()=>{});
+    state.reader=dec.readable.getReader();
+    updateConnUI(); setStatus("연결됨 · "+baud+" baud · 신호 수신 중…",false);
+    readLoop();
+  }
+  async function readLoop(){
+    let rx="";
+    try{
+      while(true){
+        const {value,done}=await state.reader.read();
+        if(done) break;
+        if(state.paused) { rx=""; continue; }
+        rx+=value; let idx, batch=[];
+        while((idx=rx.indexOf("\n"))>=0){ const line=rx.slice(0,idx); rx=rx.slice(idx+1); const p=parseLine(line); if(p) batch.push(p); }
+        if(batch.length) ingest(batch);
+      }
+    }catch(e){ /* 연결 끊김 */ }
+  }
+  async function disconnect(){
+    try{ if(state.reader){ await state.reader.cancel(); state.reader.releaseLock(); } }catch(_){}
+    try{ if(state.closedPromise) await state.closedPromise; }catch(_){}
+    try{ if(state.port) await state.port.close(); }catch(_){}
+    state.port=null; state.reader=null; state.connected=false;
+    updateConnUI(); setStatus("연결이 해제되었습니다.",false);
+  }
+
+  // ===== 데모(시뮬레이션) =====
+  let demoTimer=null, demoClock=0;
+  function startDemo(){
+    if(state.connected) return;
+    clearData(); state.demo=true; state.label="ECG"; state.hasProc=true;
+    updateConnUI(); setStatus("데모 모드 — 가상 ECG 신호를 그리는 중입니다.",false);
+    const fs=250, step=1/fs; let beatPhase=0, rr=0.83;
+    demoTimer=setInterval(()=>{
+      if(state.paused) return;
+      const batch=[]; const count=Math.round(fs*0.03);   // ~30ms 분량
+      for(let i=0;i<count;i++){
+        demoClock+=step; beatPhase+=step;
+        if(beatPhase>=rr){ beatPhase-=rr; rr=0.83*(1+(Math.sin(demoClock*0.7)*0.05)); }
+        const d=beatPhase-0.18;
+        let v=0;
+        v+=0.9*Math.exp(-Math.pow((d+0.16)/0.022,2));
+        v+=-1.8*Math.exp(-Math.pow((d+0.018)/0.009,2));
+        v+=7.5*Math.exp(-Math.pow((d)/0.010,2));
+        v+=-2.3*Math.exp(-Math.pow((d-0.020)/0.011,2));
+        v+=1.9*Math.exp(-Math.pow((d-0.20)/0.045,2));
+        const raw=Math.round(2048 + v*180 + 22*Math.sin(demoClock*2*Math.PI*60) + (Math.random()-0.5)*40);
+        const proc=Math.round(v*180 + (Math.random()-0.5)*10);
+        batch.push({raw, proc, label:"ECG"});
+      }
+      ingest(batch);
+    },30);
+  }
+  function stopDemo(){ if(demoTimer){clearInterval(demoTimer);demoTimer=null;} state.demo=false; updateConnUI(); }
+
+  // ===== BPM 추정 =====
+  function computeBPM(){
+    const prim = (state.hasProc && state.show!=="raw") ? state.proc : state.raw;
+    const n=state.ts.length; if(n<20){ state.bpm=null; return; }
+    const now=state.ts[n-1], t0=now-6; let i0=n-1; while(i0>0 && state.ts[i0]>t0) i0--;
+    let mn=Infinity,mx=-Infinity,sum=0,c=0;
+    for(let i=i0;i<n;i++){ const v=prim[i]; if(v<mn)mn=v; if(v>mx)mx=v; sum+=v; c++; }
+    if(c<10||mx-mn<1){ state.bpm=null; return; }
+    const mean=sum/c, thr=mean+0.55*(mx-mean);
+    const peaks=[]; let last=-1;
+    for(let i=i0+1;i<n-1;i++){ const v=prim[i];
+      if(v>thr && v>=prim[i-1] && v>prim[i+1]){ const t=state.ts[i]; if(last<0||t-last>0.30){ peaks.push(t); last=t; } } }
+    if(peaks.length<2){ state.bpm=null; return; }
+    const rrs=[]; for(let k=1;k<peaks.length;k++) rrs.push(peaks[k]-peaks[k-1]);
+    rrs.sort((a,b)=>a-b); const med=rrs[Math.floor(rrs.length/2)];
+    if(med>0.25 && med<2.0){ state.bpm=Math.round(60/med); state.rr=Math.round(med*1000); } else state.bpm=null;
+  }
+
+  // ===== 렌더 =====
+  let W=0,H=0,DPR=1;
+  function resize(){ DPR=window.devicePixelRatio||1; const r=canvas.getBoundingClientRect(); W=r.width;H=r.height; canvas.width=Math.round(W*DPR); canvas.height=Math.round(H*DPR); ctx.setTransform(DPR,0,0,DPR,0,0); }
+  function primaryArr(){ return (state.hasProc && state.show!=="raw") ? state.proc : state.raw; }
+  function render(){
+    requestAnimationFrame(render);
+    if(!W) resize();
+    ctx.clearRect(0,0,W,H);
+    const active=state.connected||state.demo;
+    $("idlehint").classList.toggle("hide",active && state.ts.length>2);
+    if(state.ts.length<2){ return; }
+    const padL=14,padR=12,padT=12,padB=22, x0=padL,x1=W-padR,plotW=x1-x0,y0=padT,y1=H-padB,plotH=y1-y0;
+    const now=performance.now()/1000 - 0.05;               // 약간 뒤(수신 지연 완충)
+    const tEnd=state.paused?state.ts[state.ts.length-1]:now, tStart=tEnd-state.windowSec;
+    const mapX=t=>x0+(t-tStart)/state.windowSec*plotW;
+
+    // 표시할 인덱스 범위
+    const N=state.ts.length; let iA=N-1; while(iA>0 && state.ts[iA]>tStart) iA--; let iB=N-1;
+
+    // Y 오토스케일(주 신호 기준, 부드럽게)
+    const prim=primaryArr(); let mn=Infinity,mx=-Infinity;
+    for(let i=iA;i<=iB;i++){ const v=prim[i]; if(v<mn)mn=v; if(v>mx)mx=v; }
+    if(state.show==="both"){ for(let i=iA;i<=iB;i++){ const v=state.raw[i]; if(v<mn)mn=v; if(v>mx)mx=v; } }
+    if(mn===Infinity){mn=0;mx=1;} if(mx-mn<1){mx=mn+1;}
+    const pad=(mx-mn)*0.12; let tLo=mn-pad, tHi=mx+pad;
+    if(state.yLo==null){state.yLo=tLo;state.yHi=tHi;} else { state.yLo+=(tLo-state.yLo)*0.18; state.yHi+=(tHi-state.yHi)*0.18; }
+    const mapY=v=>y1-(v-state.yLo)/(state.yHi-state.yLo)*plotH;
+
+    // 그리드 (1초 간격 세로선, 흐르는 느낌)
+    ctx.strokeStyle=css("--grid-minor"); ctx.lineWidth=1; ctx.beginPath();
+    for(let s=Math.ceil(tStart);s<=tEnd;s+=1){ const xx=mapX(s); ctx.moveTo(xx,y0); ctx.lineTo(xx,y1); } ctx.stroke();
+    ctx.strokeStyle=css("--grid-minor"); ctx.beginPath(); for(let g=0;g<=4;g++){const yy=y0+g/4*plotH;ctx.moveTo(x0,yy);ctx.lineTo(x1,yy);} ctx.stroke();
+    ctx.strokeStyle=css("--line"); ctx.strokeRect(x0,y0,plotW,plotH);
+    // 시간축 라벨(상대 초)
+    ctx.fillStyle=css("--muted"); ctx.font='10px "IBM Plex Mono",monospace'; ctx.textAlign="center"; ctx.textBaseline="top";
+    for(let s=Math.ceil(tStart);s<=tEnd;s+=1){ const rel=(s-tEnd); if(rel%2===0||state.windowSec<=3) ctx.fillText(rel.toFixed(0)+"s",mapX(s),y1+5); }
+
+    // 트레이스 그리기(픽셀 열 min/max 데시메이션)
+    function drawTrace(arr,color,lw){
+      ctx.strokeStyle=color; ctx.lineWidth=lw; ctx.lineJoin="round"; ctx.lineCap="round"; ctx.beginPath();
+      const span=iB-iA; if(span<=0) return;
+      if(span<=plotW){ let first=true; for(let i=iA;i<=iB;i++){ const xx=mapX(state.ts[i]),yy=mapY(arr[i]); if(first){ctx.moveTo(xx,yy);first=false;}else ctx.lineTo(xx,yy);} }
+      else { // 픽셀 열별 min/max — 실제 타임스탬프 기준이라 일시정지/공백 구간도 안전
+        let curPx=-1,mn2=0,mx2=0,lastV=0;
+        for(let i=iA;i<=iB;i++){ const px=Math.round(clamp(mapX(state.ts[i]),x0,x1)), v=arr[i];
+          if(px!==curPx){ if(curPx>=0){ ctx.moveTo(curPx,mapY(mx2)); ctx.lineTo(curPx,mapY(mn2)); ctx.moveTo(curPx,mapY(lastV)); ctx.lineTo(px,mapY(v)); } curPx=px; mn2=v; mx2=v; }
+          else { if(v<mn2)mn2=v; if(v>mx2)mx2=v; }
+          lastV=v; }
+        if(curPx>=0){ ctx.moveTo(curPx,mapY(mx2)); ctx.lineTo(curPx,mapY(mn2)); }
+      }
+      ctx.stroke();
+    }
+    if(state.show==="both" && state.hasProc){ drawTrace(state.raw,css("--raw"),1.0); drawTrace(state.proc,css("--trace"),1.6); }
+    else { drawTrace(prim, css("--trace"), 1.6); }
+
+    // 최신값 포인트
+    const lx=mapX(state.ts[iB]), ly=mapY(prim[iB]);
+    ctx.fillStyle=css("--accent"); ctx.beginPath(); ctx.arc(clamp(lx,x0,x1),ly,3.2,0,Math.PI*2); ctx.fill();
+
+    // 라벨
+    ctx.fillStyle=css("--muted"); ctx.font='600 11px "IBM Plex Sans KR",sans-serif'; ctx.textAlign="right"; ctx.textBaseline="top";
+    ctx.fillText(state.show==="raw"?"원본 (Raw)":(state.hasProc?("처리된 신호 ("+state.label+")"):"원본 (Raw)"), x1-8, y0+5);
+    if(state.paused){ ctx.fillStyle=css("--peak"); ctx.textAlign="left"; ctx.fillText("⏸ 일시정지", x0+8, y0+5); }
+  }
+
+  // ===== UI =====
+  function setStatus(m,kind){ const s=$("status"); s.textContent=m||""; s.classList.remove("err","ok"); if(kind===true)s.classList.add("err"); else if(kind==="ok")s.classList.add("ok"); }
+  function updateConnUI(){
+    const on=state.connected||state.demo;
+    $("livedot").classList.toggle("live",on);
+    $("c_conn").textContent=state.connected?"연결됨":(state.demo?"데모":"대기");
+    $("c_conn").className="v "+(on?"on":"off");
+    $("connectBtn").disabled=on; $("baud").disabled=on; $("demoBtn").disabled=state.connected;
+    $("demoBtn").textContent=state.demo?"데모 중지":"데모";
+    $("disconnectBtn").disabled=!state.connected;
+    ["pauseBtn","clearBtn","saveBtn"].forEach(id=>$(id).disabled=!on);
+  }
+  function clearData(){ state.ts=[];state.raw=[];state.proc=[];state.hasProc=false;state.n=0;state.lastVal=null;state.yLo=null;state.yHi=null;state.bpm=null;state.lastChunkT=null;state.label="—"; }
+  function refreshChips(){
+    // 측정 레이트: 최근 1초 샘플 수
+    const n=state.ts.length; let hz=0;
+    if(n>2){ const now=state.ts[n-1]; let i=n-1; while(i>0&&state.ts[i]>now-1)i--; hz=n-1-i; }
+    $("c_hz").textContent=(hz?hz:"—")+" Hz";
+    $("c_n").textContent=state.n.toLocaleString();
+    $("c_last").textContent=state.lastVal==null?"—":state.lastVal;
+    $("c_sig").textContent=state.hasProc?state.label:(state.connected||state.demo?"Raw":"—");
+    $("bpm").textContent=state.bpm==null?"—":state.bpm;
+    $("bpmsub").textContent=state.bpm==null?(state.connected||state.demo?"R-피크 대기 중… (ECG 신호일 때 표시)":"연결하면 실시간 심박이 표시됩니다"):("RR "+state.rr+" ms · 실시간 추정");
+  }
+  setInterval(()=>{ if(state.connected||state.demo){ computeBPM(); } refreshChips(); }, 500);
+
+  // ===== JSON 저장 =====
+  function saveJSON(){
+    const n=state.ts.length; if(n<2){ setStatus("저장할 데이터가 없습니다.",true); return; }
+    let hz=0; { const now=state.ts[n-1]; let i=n-1; while(i>0&&state.ts[i]>now-1)i--; hz=n-1-i; }
+    const t0=state.ts[0]; const t_ms=state.ts.map(t=>Math.round((t-t0)*1000));
+    const data={t_ms, raw:state.raw.slice()};
+    const lab=(state.hasProc?state.label:"ECG").toLowerCase();
+    if(state.hasProc) data[lab]=state.proc.slice();
+    const out={device:"ESP32 + BioAmp EXG Pill (live)", channel:state.hasProc?state.label:"ECG",
+      sample_rate_hz:hz||250, effective_rate_hz:hz||null, recorded_at:new Date().toISOString().slice(0,19),
+      duration_s:+((state.ts[n-1]-t0).toFixed(1)), n_samples:n, columns:Object.keys(data), data};
+    const blob=new Blob([JSON.stringify(out)],{type:"application/json"});
+    const url=URL.createObjectURL(blob); const a=document.createElement("a");
+    const ts=new Date(); const pad=x=>String(x).padStart(2,"0");
+    a.href=url; a.download=`live_${ts.getFullYear()}${pad(ts.getMonth()+1)}${pad(ts.getDate())}_${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}.json`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+    setStatus("JSON을 저장했습니다 · "+n.toLocaleString()+" 샘플 · 분석용 뷰어에서 열 수 있어요.","ok");
+  }
+
+  // ===== events =====
+  $("connectBtn").addEventListener("click",connect);
+  $("disconnectBtn").addEventListener("click",disconnect);
+  $("demoBtn").addEventListener("click",()=>{ if(state.demo) stopDemo(); else startDemo(); });
+  $("pauseBtn").addEventListener("click",()=>{ state.paused=!state.paused; $("pauseBtn").textContent=state.paused?"재개":"일시정지"; $("pauseBtn").setAttribute("aria-pressed",state.paused?"true":"false"); });
+  $("clearBtn").addEventListener("click",()=>{ const lab=state.label, hp=state.hasProc; clearData(); state.label=lab; state.hasProc=hp; });
+  $("saveBtn").addEventListener("click",saveJSON);
+  document.querySelectorAll("#sigseg button").forEach(b=>b.addEventListener("click",()=>{ document.querySelectorAll("#sigseg button").forEach(x=>x.setAttribute("aria-pressed","false")); b.setAttribute("aria-pressed","true"); state.show=b.dataset.s; state.yLo=null;state.yHi=null; }));
+  document.querySelectorAll("#winseg button").forEach(b=>b.addEventListener("click",()=>{ document.querySelectorAll("#winseg button").forEach(x=>x.setAttribute("aria-pressed","false")); b.setAttribute("aria-pressed","true"); state.windowSec=+b.dataset.w; }));
+  $("themeBtn").addEventListener("click",()=>{ const cur=document.documentElement.getAttribute("data-theme"); const dark=cur?cur==="dark":matchMedia("(prefers-color-scheme: dark)").matches; document.documentElement.setAttribute("data-theme",dark?"light":"dark"); try{localStorage.setItem("livetheme",dark?"light":"dark");}catch(_){} });
+  window.addEventListener("resize",()=>{ resize(); });
+  if(navigator.serial) navigator.serial.addEventListener?.("disconnect",()=>{ if(state.connected){ state.connected=false; updateConnUI(); setStatus("기기 연결이 끊어졌습니다(USB 분리?).",true);} });
+
+  try{ const th=localStorage.getItem("livetheme"); if(th) document.documentElement.setAttribute("data-theme",th);}catch(_){}
+  if(!("serial" in navigator)) $("nowebserial").style.display="";
+  resize(); requestAnimationFrame(render); updateConnUI(); refreshChips();
+})();
+</script>
+</body>
+</html>
